@@ -1,0 +1,154 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>R-Tree on Map</title>
+<link href="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.css" rel="stylesheet" />
+<style>
+    body { margin:0; font-family: Arial, sans-serif; }
+    #map { width: 100vw; height: 100vh; }
+    .topbar { position:absolute; left:10px; top:10px; z-index:600; background:rgba(255,255,255,0.9); padding:6px 10px; border-radius:6px; box-shadow:0 1px 6px rgba(0,0,0,0.15); }
+</style>
+<div id="map"></div>
+<div class="topbar">Dataset Visualization — <small>Cities (blue) and Cellular Towers (red)</small></div>
+<script src="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.js"></script>
+<script>
+const map = new maplibregl.Map({
+    container: 'map',
+    // demo style that serves map tiles without a token
+    style: 'https://demotiles.maplibre.org/style.json',
+    center: [CENTER_LON, CENTER_LAT],
+    zoom: 3
+});
+
+map.addControl(new maplibregl.NavigationControl());
+
+function buildGeoJSON(data){
+    const towers = {
+        type: 'FeatureCollection',
+        features: data.towers.map(p => ({ 
+            type: 'Feature', 
+            geometry: { type: 'Point', coordinates: [p[0], p[1]] }, 
+            properties: { type: 'tower', radius: p[2] }
+        }))
+    };
+
+    const cities = {
+        type: 'FeatureCollection',
+        features: data.cities.map(p => ({ 
+            type: 'Feature', 
+            geometry: { type: 'Point', coordinates: [p[0], p[1]] }, 
+            properties: { type: 'city', radius: p[2] }
+        }))
+    };
+
+    // Create circle polygons for towers
+    const towerCircles = {
+        type: 'FeatureCollection',
+        features: data.towers.map(p => {
+            const [lon, lat, radius] = p;
+            // Convert radius from degrees to an approximate circle
+            const points = 64;
+            const coords = [];
+            for (let i = 0; i <= points; i++) {
+                const angle = (i / points) * 2 * Math.PI;
+                const dx = radius * Math.cos(angle);
+                const dy = radius * Math.sin(angle);
+                coords.push([lon + dx, lat + dy]);
+            }
+            return {
+                type: 'Feature',
+                geometry: { type: 'Polygon', coordinates: [coords] },
+                properties: { type: 'tower', radius: radius }
+            };
+        })
+    };
+
+    // Create circle polygons for cities
+    const cityCircles = {
+        type: 'FeatureCollection',
+        features: data.cities.map(p => {
+            const [lon, lat, radius] = p;
+            const points = 64;
+            const coords = [];
+            for (let i = 0; i <= points; i++) {
+                const angle = (i / points) * 2 * Math.PI;
+                const dx = radius * Math.cos(angle);
+                const dy = radius * Math.sin(angle);
+                coords.push([lon + dx, lat + dy]);
+            }
+            return {
+                type: 'Feature',
+                geometry: { type: 'Polygon', coordinates: [coords] },
+                properties: { type: 'city', radius: radius }
+            };
+        })
+    };
+
+    return { towers, cities, towerCircles, cityCircles };
+}
+
+fetch('/api/data.json').then(r => { if(!r.ok) throw new Error('data.json request failed'); return r.json(); }).then(data => {
+    const { towers, cities, towerCircles, cityCircles } = buildGeoJSON(data);
+    map.on('load', () => {
+        // Add cellular tower circles in red
+        if(!map.getSource('tower-circles')){
+            map.addSource('tower-circles', { type: 'geojson', data: towerCircles });
+            map.addLayer({ 
+                id: 'tower-circles-fill', 
+                type: 'fill', 
+                source: 'tower-circles', 
+                paint: { 'fill-color': 'red', 'fill-opacity': 0.2 } 
+            });
+            map.addLayer({ 
+                id: 'tower-circles-line', 
+                type: 'line', 
+                source: 'tower-circles', 
+                paint: { 'line-color': 'red', 'line-width': 1, 'line-opacity': 0.6 } 
+            });
+        }
+
+        // Add city circles in blue
+        if(!map.getSource('city-circles')){
+            map.addSource('city-circles', { type: 'geojson', data: cityCircles });
+            map.addLayer({ 
+                id: 'city-circles-fill', 
+                type: 'fill', 
+                source: 'city-circles', 
+                paint: { 'fill-color': 'blue', 'fill-opacity': 0.2 } 
+            });
+            map.addLayer({ 
+                id: 'city-circles-line', 
+                type: 'line', 
+                source: 'city-circles', 
+                paint: { 'line-color': 'blue', 'line-width': 1, 'line-opacity': 0.6 } 
+            });
+        }
+
+        // Add center points for towers (red dots)
+        if(!map.getSource('towers')){
+            map.addSource('towers', { type: 'geojson', data: towers });
+            map.addLayer({ 
+                id: 'towers-layer', 
+                type: 'circle', 
+                source: 'towers', 
+                paint: { 'circle-radius': 2, 'circle-color': 'darkred', 'circle-opacity': 0.8 } 
+            });
+        }
+
+        // Add center points for cities (blue dots)
+        if(!map.getSource('cities')){
+            map.addSource('cities', { type: 'geojson', data: cities });
+            map.addLayer({ 
+                id: 'cities-layer', 
+                type: 'circle', 
+                source: 'cities', 
+                paint: { 'circle-radius': 2, 'circle-color': 'darkblue', 'circle-opacity': 0.8 } 
+            });
+        }
+
+        if(data.bbox){
+            const [minLon, minLat, maxLon, maxLat] = data.bbox;
+            map.fitBounds([[minLon, minLat], [maxLon, maxLat]], { padding: 20 });
+        }
+    });
+}).catch(err => { console.error('data load error', err); });
+</script>

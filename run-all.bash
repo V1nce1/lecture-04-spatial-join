@@ -1,0 +1,1 @@
+python3 benchmark.py 00-template/implementation.py 01-bruteforce/implementation.py 02-synchronous-traversal/implementation.py 03-spatial-hash/implementation.py 04-partition-based-spatial-merge/implementation.py 05-nested-loop/implementation.py 06-sort-and-match/implementation.py 07-slot-index/implementation.py
