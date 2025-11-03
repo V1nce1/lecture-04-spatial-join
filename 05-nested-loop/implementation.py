@@ -13,7 +13,6 @@ def join(prepared: dict) -> List[Tuple[Point, Point]]:
     points_b = prepared["points_b"]
 
     for point_b in points_b:
-        # range query
         points_a = rangeQuery(rtree_a.root, point_b)
         for point_a in points_a:
             result.append((point_a, point_b))
@@ -24,21 +23,19 @@ def join(prepared: dict) -> List[Tuple[Point, Point]]:
 def rangeQuery(node: Node, query: Point) -> List[Point]:
     childrenToSearch: List[Node] = []
     results: List[Point] = []
-
-    for child in node.children:
-        if child.mbr.intersects(query.mbr):
-            childrenToSearch.append(child)
     
     if node.is_leaf():
-        for point in childrenToSearch:
+        for point in node.children:
             if point.mbr.intersects(query.mbr):
                 results.append(point)
         return results
 
-    # non-leaf so do recursion in subtree
-    for child in childrenToSearch:
-        recresult = rangeQuery(child, query)
-        results.extend(recresult)
+    # non-leaf
+    for child in node.children:
+        if child.mbr.intersects(query.mbr):
+            childrenToSearch.append(child)
+            recresult = rangeQuery(child, query)
+            results.extend(recresult)
 
     return results
 
