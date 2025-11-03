@@ -13,4 +13,7 @@ def join(prepared: dict) -> List[Tuple[Point, Point]]:
         for point_b in points_b:
             if point_a.mbr.intersects(point_b.mbr):
                 result.append((point_a, point_b))
+    # for r in result:
+    #     a, b = r
+    #     print(a,b)
     return result
